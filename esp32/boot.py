@@ -16,7 +16,8 @@ def do_connect():
     credfile = open('wifi.txt')
     wificreds = str.splitlines(credfile.read())
     ssid, pwd = wificreds
-
+    credfile.close()
+    
     sta_if = network.WLAN(network.STA_IF)
     if not sta_if.isconnected():
         print('Connecting to network %s...' % ssid)
