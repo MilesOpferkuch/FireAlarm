@@ -59,8 +59,11 @@ def client(host, port):
             sock.settimeout(2)
             # Listen for ALARMOFF signal from RPi
             try:
-                data = sock.recv(32).decode().strip()
-                if data == "ALARMOFF":
+                print("Listening for data...")
+                data = sock.recv(512).decode().splitlines()
+                if data:
+                    print(data)
+                if "ALARMOFF" in data:
                     doAlarm = False
                     sock.settimeout(None)
                     print("Alarm turned off by RPi")
@@ -80,15 +83,15 @@ def client(host, port):
             PIN_LED_RED.value(0)
             sleep(1)
 
-        data = sock.recv(32).decode().strip()
+        data = sock.recv(512).decode().splitlines()
 
-        if data == 'DOALARM':
+        if 'DOALARM' in data:
             doAlarm = True
             print("Alarm triggered!")
 
         # 'STATUS' should be sent by RPi every 30 seconds.
         # if esp32 fails to respond with 'CONNECTED', RPi sends a phone notification
-        elif data == 'STATUS':
+        elif 'STATUS' in data:
             sock.send('CONNECTED'.encode())
             print("Status OK")
 
