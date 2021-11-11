@@ -53,10 +53,19 @@ def client(host, port):
 
     doAlarm = False
 
-    while True:
+    # Setup interrupt for reset button
+    def rst_callback(pin):
+        nonlocal doAlarm
+        doAlarm = False
+        PIN_LED_RED.value(0)
+        PIN_ALARM.value(0)
+        print("Alarm turned off locally.")
 
+    PIN_RST.irq(trigger=machine.Pin.IRQ_FALLING, handler=rst_callback)
+
+    while True:
         while doAlarm:
-            sock.settimeout(2)
+            sock.settimeout(1)
             # Listen for ALARMOFF signal from RPi
             try:
                 print("Listening for data...")
@@ -70,18 +79,12 @@ def client(host, port):
                     break
             except:     # MicroPython doesn't like it if we catch socket.timeout specifically
                 pass
-
-            if PIN_RST.value() == 0:
-                doAlarm = False
-                PIN_LED_RED.value(0)
-                print("Alarm turned off locally")
-
             PIN_ALARM.value(1)
             PIN_LED_RED.value(1)
             sleep(1)
             PIN_ALARM.value(0)
             PIN_LED_RED.value(0)
-            sleep(1)
+            sleep(0.5)
 
         data = sock.recv(512).decode().splitlines()
 
