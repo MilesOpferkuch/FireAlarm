@@ -10,6 +10,11 @@ PIN_LED_RED = machine.Pin(13, machine.Pin.OUT)
 PIN_LED_GREEN = machine.Pin(14, machine.Pin.OUT)
 PIN_RST = machine.Pin(15, machine.Pin.IN, machine.Pin.PULL_UP)  # Pin for reset button that turns off alarm for 5 minutes
 
+PIN_ALARM.value(0)
+PIN_LED_RED.value(0)
+PIN_LED_GREEN.value(0)
+
+
 # Connect to WiFi
 def do_connect():
 
@@ -53,7 +58,7 @@ def client(host, port):
 
     doAlarm = False
 
-    # Setup interrupt for reset button
+    # Set up interrupt for reset button
     def rst_callback(pin):
         nonlocal doAlarm
         doAlarm = False
