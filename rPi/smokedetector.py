@@ -7,6 +7,15 @@ from multiprocessing import Process
 
 GPIO.setmode(GPIO.BCM)
 
+'''
+This script will run on the Raspberry Pi in my garage, which sits next to my 3D printer and runs OctoPrint.
+It reads from a MQ-2 smoke detector circuit, which outputs 3.3v normally
+but drops to low voltage when there's smoke. This script sets off an alarm in the garage,
+and also sends a signal to an ESP32 microprocessor in my bedroom which has its own alarm.
+That way I'll hear it if I'm sleeping. In subsequent comments, "local alarm" refers to
+the one in the garage and "remote alarm" refers to the one in my bedroom.
+'''
+
 
 class Server:
 
@@ -14,10 +23,12 @@ class Server:
         self.port = port
         self.MAX_CLIENTS = 1
 
-        self.PIN_ALARM = 23     # Pin to enable IC 555 which connects to LED and piezo alarm
-        self.PIN_MQ2 = 24       # Pin to smoke detector DOut
+        self.PIN_MQ2 = 24       # Pin from smoke detector DOut
+        self.PIN_ALARM = 23     # Pin to enable IC 555 which connects to red LED and piezo alarm
+        self.PIN_LED_GREEN = 12
         self.PIN_RST = 25       # Pin to reset button
         GPIO.setup(self.PIN_ALARM, GPIO.OUT)
+        GPIO.setup(self.PIN_LED_GREEN, GPIO.OUT)
         GPIO.setup(self.PIN_MQ2, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.PIN_RST, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.output(self.PIN_ALARM, 0)
@@ -140,6 +151,7 @@ class Server:
             if self.alarmIsOn and GPIO.input(self.PIN_MQ2) == 1:
                 print("MQ-2 reading high again; turning off alarm.")
                 self.alarmOff()
+                # Tell esp32 to stop its alarm
                 client.send("ALARMOFF\n".encode())
 
 server = Server(5678)
