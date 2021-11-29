@@ -6,23 +6,27 @@ from time import localtime
 from ntptime import settime
 import socket
 
+'''
+This script runs on the ESP32 microprocessor in my bedroom. It receives data
+from the Raspberry Pi in my garage, and sets off an alarm if it receives the signal to do so.
+Note that this uses Micropython and will only run on an ESP32.
+'''
+
 sta_if = network.WLAN(network.STA_IF)
 
-PIN_ALARM = machine.Pin(15, machine.Pin.OUT)
-PIN_LED_RED = machine.Pin(2, machine.Pin.OUT)
-PIN_LED_GREEN = machine.Pin(0, machine.Pin.OUT)
+PIN_ALARM = machine.Pin(15, machine.Pin.OUT)                   # Pin to piezo alarm
+PIN_LED_RED = machine.Pin(2, machine.Pin.OUT)                  # Pin to red status light
+PIN_LED_GREEN = machine.Pin(0, machine.Pin.OUT)                # Pin to green status light
 PIN_RST = machine.Pin(4, machine.Pin.IN, machine.Pin.PULL_UP)  # Pin for reset button that turns off alarm for 5 minutes
 
+# Pull low on startup
 PIN_ALARM.value(0)
 PIN_LED_RED.value(0)
 PIN_LED_GREEN.value(0)
 
-'''
-This script runs on the ESP32 microprocessor in my bedroom. It receives data
-from the Raspberry Pi in my garage, and sets off an alarm if it receives the signal to do so.
-'''
-
-# Print message with UTC timestamp
+# Print message with UTC timestamp.
+# Micropython lacks a lot of the datetime formatting stuff from Python
+# so we have to do it manually.
 def print_t(msg):
     time = localtime()  # "localtime" on MicroPython is actually UTC
     timelist = []
@@ -63,9 +67,9 @@ def do_connect():
     PIN_LED_RED.value(0)
     # Blink green LED to indicate successful connection to router
     for i in range(0,4):
-        time.sleep(0.1)
+        time.sleep(0.2)
         PIN_LED_GREEN.value(1)
-        time.sleep(0.1)
+        time.sleep(0.2)
         PIN_LED_GREEN.value(0)
     
 
@@ -86,14 +90,15 @@ def client(host, port):
 
     doAlarm = False
 
-    # Set up interrupt for reset button
+    # Callback for reset button
     def rst_callback(pin):
         nonlocal doAlarm
         doAlarm = False
         PIN_LED_RED.value(0)
         PIN_ALARM.value(0)
-        print_t("Alarm turned off locally.")
+        print_t("Local alarm disabled.")
 
+    # Set up cpu interrupt for reset button
     PIN_RST.irq(trigger=machine.Pin.IRQ_FALLING, handler=rst_callback)
 
     while True:
@@ -130,7 +135,6 @@ def client(host, port):
             sock.send('CONNECTED'.encode())
             print_t("Status OK")
 
-
     sock.close()
     print_t("Client closed.")
 
@@ -138,7 +142,7 @@ def client(host, port):
 
 def main():
     try:
-        client('192.168.1.5', 5678)
+        client('192.168.1.5', 5678)  # my RPi server is running on this IP
     except OSError as e:
         print("Connection failed: %s" % e)
 
