@@ -17,7 +17,7 @@ sta_if = network.WLAN(network.STA_IF)
 PIN_ALARM = machine.Pin(15, machine.Pin.OUT)                   # Pin to piezo alarm
 PIN_LED_RED = machine.Pin(2, machine.Pin.OUT)                  # Pin to red status light
 PIN_LED_GREEN = machine.Pin(0, machine.Pin.OUT)                # Pin to green status light
-PIN_RST = machine.Pin(4, machine.Pin.IN, machine.Pin.PULL_UP)  # Pin for reset button that turns off alarm for 5 minutes
+PIN_RST = machine.Pin(5, machine.Pin.IN, machine.Pin.PULL_UP)  # Pin for reset button that turns off alarm for 5 minutes
 
 # Pull low on startup
 PIN_ALARM.value(0)
@@ -55,12 +55,16 @@ def do_connect():
         sta_if.connect(ssid, pwd)
         while not sta_if.isconnected():
             PIN_LED_RED.value(1)
-            PIN_LED_GREEN.value(0)
+            PIN_LED_GREEN.value(1)
             pass
     print('network config:', sta_if.ifconfig())
 
-    # Set RTC
-    settime()
+    # Set clock
+    try:
+        settime()
+    except OSError as e:
+        print("Error getting time from remote server:" + e)
+        print("Log timestamps will be incorrect.")
     rtc = machine.RTC()
     print_t("System clock set.")
 
@@ -142,9 +146,10 @@ def client(host, port):
 
 def main():
     try:
-        client('192.168.1.5', 5678)  # my RPi server is running on this IP
+        client('192.168.1.16', 5678)  # my RPi server is running on this IP
     except OSError as e:
         print("Connection failed: %s" % e)
-
+        PIN_LED_RED.value(1)
+        PIN_LED_GREEN.value(0)
 
 main()
