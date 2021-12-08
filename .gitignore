@@ -2,3 +2,4 @@ esp32/wifi.txt
 rPi/ifttt.txt
 *.gcode
 3D files/pcb.stl
+gerber/CAMOutputs/*
