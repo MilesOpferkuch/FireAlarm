@@ -13,9 +13,9 @@ Final project: WiFi smoke detector by Miles Opferkuch
 https://github.com/MilesOpferkuch/FireAlarm
 
 This script runs on the ESP32 microprocessor in my bedroom. It receives data
-from the Raspberry Pi in my garage, and sets off an alarm if it receives the signal to do so.
+from the Raspberry Pi in my garage, and sets off an alarm when it receives the signal to do so.
 Note that this uses Micropython and will only run on an ESP32 (or possibly an ESP8266).
-It is also specific to how my circuit is wired.
+It's also specific to how my circuit is wired: https://github.com/MilesOpferkuch/FireAlarm/blob/main/media/ESP32_schem.png
 '''
 
 

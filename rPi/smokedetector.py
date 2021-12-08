@@ -74,10 +74,12 @@ class Server:
                 print("Could not query esp32's status: " + e)
 
 
-    # Turn on local alarm
+    # Turn on local alarm.
+    # The alarm runs on a 555 timer so all we have to do here is pull the ALRM pin high:
+    # https://github.com/MilesOpferkuch/FireAlarm/blob/main/media/rPi_schem.png
     def alarmOn(self):
         if not self.cooldownFlag:
-            GPIO.output(PIN_ALARM, 1)   # The alarm runs on a 555 timer so all we have to do here is pull the pin high
+            GPIO.output(PIN_ALARM, 1)   
             self.alarmIsOn = True
             print_t("alarmOn() called!")
 
@@ -117,8 +119,7 @@ class Server:
         while True:
             # Trigger the local alarm if the MQ2 pin goes low.
             # The local alarm is fired by pulling PIN_ALARM high.
-            # It runs on a 555 timer so we don't have to block the main thread
-            # by turning the buzzer on and off.
+            # It runs on a 555 timer so we don't have to block the main thread by turning the buzzer on and off.
             if (GPIO.input(PIN_MQ2) == 0
                 and not self.alarmIsOn
                 and not self.cooldownFlag):
