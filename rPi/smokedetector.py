@@ -10,6 +10,7 @@ GPIO.setmode(GPIO.BCM)
 
 '''
 Final project: WiFi smoke detector by Miles Opferkuch
+https://github.com/MilesOpferkuch/FireAlarm
 
 This script will run on a Raspberry Pi in my garage, which sits next to my 3D printer
 and runs OctoPrint. It reads from a MQ-2 smoke detector circuit, which normally outputs 3.3v
@@ -18,7 +19,6 @@ sends a push notification to my phone, and sends a signal to an ESP32 microproce
 which has its own alarm. That way I'll hear it if I'm sleeping. In subsequent comments, "local alarm" refers to
 the one in the garage (controlled by this script) and "remote alarm" refers to the one in my bedroom (controlled by /esp32/boot.py).
 '''
-
 
 
 # Print message with local timestamp
@@ -38,7 +38,7 @@ class Server:
     def __init__(self, port):
         self.port = port
         self.alarmIsOn = False
-        self.cooldownFlag = False           # Will be set True when RST button pressed. This will disable the alarm for 5 minutes.
+        self.cooldownFlag = False           # Will be set True when RST button is pressed. This will disable the alarm for 5 minutes.
         self.cooldownTime = 0.0             # Epoch time when the RST button was last pressed.
 
         # Get IFTTT API key
@@ -50,10 +50,10 @@ class Server:
     # Pings the esp32 and waits for a response every 30 secs.
     # Sends a push notification if it times out. This runs as a subprocess.
     def getEspStatus(self, client):
-        try:
-            self.hasSentTimeoutNotif = False
-            print_t("Started querying ESP32 status.")
-            while True:
+        self.hasSentTimeoutNotif = False
+        print_t("Started querying ESP32 status.")
+        while True:
+            try:
                 client.send('STATUS\n'.encode())  # Ping esp32
                 try:
                     data = client.recv(32)      # Wait for response
@@ -64,23 +64,20 @@ class Server:
                 except socket.timeout:  
                     if not self.hasSentTimeoutNotif:
                         print_t("Esp32 status query timed out after 10 seconds, sending push notification...")
-                #        requests.post('https://maker.ifttt.com/trigger/esp_timeout/with/key/%s' % self.IFTTT_KEY)
+                        requests.post('https://maker.ifttt.com/trigger/esp_timeout/with/key/%s' % self.IFTTT_KEY)
                         self.hasSentTimeoutNotif = True
                         print_t("Push notification sent.")
                     else:
                         print_t("Esp32 status query timed out after 10 seconds. Already sent push notification.")
-
                 time.sleep(30)
-        except KeyboardInterrupt:
-            GPIO.output(PIN_ALARM, 0)
-            GPIO.output(PIN_LED_GREEN, 0)
-            GPIO.cleanup()
+            except Exception as e:
+                print("Could not query esp32's status: " + e)
 
 
     # Turn on local alarm
-    def alarmOn(self, pin = 0):
+    def alarmOn(self):
         if not self.cooldownFlag:
-            GPIO.output(PIN_ALARM, 1)
+            GPIO.output(PIN_ALARM, 1)   # The alarm runs on a 555 timer so all we have to do here is pull the pin high
             self.alarmIsOn = True
             print_t("alarmOn() called!")
 
@@ -93,22 +90,19 @@ class Server:
 
 
     def main(self):
-        # Trigger the local alarm if the MQ2 pin goes low.
-        # The local alarm is triggered by pulling PIN_ALARM high.
-        # It runs on a 555 timer so we don't block the main thread
-        # by turning the buzzer on and off.
 
         print_t("Starting server on port %d..." % self.port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)      # Fixes "address already in use" error
         sock.bind(('', self.port))
         sock.listen(MAX_CLIENTS)
-        print_t("Server started, waiting for client to connect...")
+        print_t("Server started. Waiting for client to connect.")
 
         client, cl_addr = sock.accept()
         client.settimeout(10)
         print_t("Client %s:%d connected." % cl_addr)
 
+        # Blink green light to indicate successful connection
         for i in range (0, 4):
             GPIO.output(PIN_LED_GREEN, 0)
             time.sleep(0.1)
@@ -121,16 +115,17 @@ class Server:
 
         # Main loop
         while True:
-
-            # When smoke detected:
+            # Trigger the local alarm if the MQ2 pin goes low.
+            # The local alarm is fired by pulling PIN_ALARM high.
+            # It runs on a 555 timer so we don't have to block the main thread
+            # by turning the buzzer on and off.
             if (GPIO.input(PIN_MQ2) == 0
                 and not self.alarmIsOn
                 and not self.cooldownFlag):
 
                 time.sleep(0.25)    # 250ms debounce
-                if GPIO.input(PIN_MQ2) == 0:
 
-                    # Trigger local alarm
+                if GPIO.input(PIN_MQ2) == 0:
                     self.alarmIsOn = True
                     self.alarmOn()
                     print_t("Smoke detected! Stopping ESP32 status queries...")
@@ -144,25 +139,23 @@ class Server:
 
                     # Send push notification to phone via IFTTT.
                     print_t("Sending push notification...")
-                #    requests.post('https://maker.ifttt.com/trigger/smoke_detected/with/key/%s' % self.IFTTT_KEY)
+                    requests.post('https://maker.ifttt.com/trigger/smoke_detected/with/key/%s' % self.IFTTT_KEY)
                     print_t("Notification sent.")
 
-            # Handle RST button press
+            # Handle reset button press
             if GPIO.input(PIN_RST) == 0 and self.alarmIsOn:
-                print_t("Pausing alarm for 5 minutes.")
+                print_t("RESET pressed. Pausing alarm for 5 minutes.")
                 self.alarmOff()
                 self.cooldownFlag = True
-                self.cooldownTime = time.time()
-                # Tell esp32 to stop its alarm
-                client.send("ALARMOFF\n".encode())
-                # Restart esp32 query process
-                queryProcess = Process(target=self.getEspStatus, args=(client,))
+                self.cooldownTime = time.time()     # Take note of when we paused the alarm so we can un-pause it in 5 mins
+                client.send("ALARMOFF\n".encode())      # Tell esp32 to stop its alarm
+                queryProcess = Process(target=self.getEspStatus, args=(client,))    # Restart esp32 query process
                 queryProcess.start()
 
             # Reset cooldown flag 5 minutes after RST button pressed
             if (time.time() >= self.cooldownTime + 300 and self.cooldownFlag):      
                 self.cooldownFlag = False
-                print_t("5 minutes since RST pressed. Re-enabling alarm.")
+                print_t("5 minutes since RESET pressed. Re-enabling alarm.")
 
             # Turn off alarm if MQ2 goes high again
             if self.alarmIsOn and GPIO.input(PIN_MQ2) == 1:
@@ -170,6 +163,9 @@ class Server:
                 self.alarmOff()
                 # Tell esp32 to stop its alarm
                 client.send("ALARMOFF\n".encode())
+                # Restart esp32 query process
+                queryProcess = Process(target=self.getEspStatus, args=(client,))
+                queryProcess.start()
 
 
 if __name__ == '__main__':
@@ -180,19 +176,22 @@ if __name__ == '__main__':
     PIN_LED_GREEN = 12
     PIN_RST = 25
 
+    # Set up GPIO pins
     GPIO.setup(PIN_ALARM, GPIO.OUT)
     GPIO.setup(PIN_LED_GREEN, GPIO.OUT)
     GPIO.setup(PIN_MQ2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(PIN_RST, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
+    # Start server with outputs low
     GPIO.output(PIN_ALARM, 0)
     GPIO.output(PIN_LED_GREEN, 0)
+
+    # Run server
     try:
         server.main()
-    except Exception as e:
-        print_t(e)
+    except KeyboardInterrupt:
         GPIO.output(PIN_ALARM, 0)
         GPIO.output(PIN_LED_GREEN, 0)
-        GPIO.cleanup()
+        GPIO.cleanup
         sys.exit(0)
-    GPIO.cleanup()
+    except Exception as e:
+        print_t(e)
