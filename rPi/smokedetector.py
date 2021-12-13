@@ -71,7 +71,7 @@ class Server:
                         print_t("Esp32 status query timed out after 10 seconds. Already sent push notification.")
                 time.sleep(30)
             except Exception as e:
-                print("Could not query esp32's status: " + e)
+                print("Could not query esp32's status: ", e)
 
 
     # Turn on local alarm.
